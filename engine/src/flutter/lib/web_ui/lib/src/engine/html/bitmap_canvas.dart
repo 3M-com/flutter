@@ -12,13 +12,13 @@ import '../canvas_pool.dart';
 import '../display.dart';
 import '../dom.dart';
 import '../engine_canvas.dart';
-import '../frame_reference.dart';
 import '../text/canvas_paragraph.dart';
 import '../util.dart';
 import '../vector_math.dart';
 import 'clip.dart';
 import 'color_filter.dart';
 import 'dom_canvas.dart';
+import 'frame_reference.dart';
 import 'image.dart';
 import 'painting.dart';
 import 'path/path.dart';
@@ -341,6 +341,13 @@ class BitmapCanvas extends EngineCanvas {
   @override
   void clipRRect(ui.RRect rrect) {
     _canvasPool.clipRRect(rrect);
+  }
+
+  @override
+  void clipRSuperellipse(ui.RSuperellipse rse) {
+    // TODO(dkwingsmt): Properly implement clipRSE on Web instead of falling
+    // back to RRect.  https://github.com/flutter/flutter/issues/163718
+    _canvasPool.clipRRect(rse.toApproximateRRect());
   }
 
   @override
@@ -938,6 +945,7 @@ class BitmapCanvas extends EngineCanvas {
   void drawParagraph(CanvasParagraph paragraph, ui.Offset offset) {
     assert(paragraph.isLaidOut);
 
+    // dart format off
     // Normally, text is composited as a plain HTML <p> tag. However, if a
     // bitmap canvas was used for a preceding drawing command, then it's more
     // efficient to continue compositing into the existing canvas, if possible.
@@ -948,13 +956,13 @@ class BitmapCanvas extends EngineCanvas {
         // in the first place.
         paragraph.canDrawOnCanvas &&
         // Cannot composite if there's no bitmap canvas to composite into.
-            // Creating a new bitmap canvas just to draw text doesn't make sense.
-            _canvasPool
-            .hasCanvas &&
+        // Creating a new bitmap canvas just to draw text doesn't make sense.
+        _canvasPool.hasCanvas &&
         !_childOverdraw &&
         // Bitmap canvas introduces correctness issues in the presence of SVG
         // filters, so prefer plain HTML in this case.
         !_renderStrategy.isInsideSvgFilterTree;
+    // dart format on
 
     if (canCompositeIntoBitmapCanvas) {
       paragraph.paint(this, offset);
@@ -1010,6 +1018,10 @@ class BitmapCanvas extends EngineCanvas {
       paint.shader == null || paint.shader is EngineImageShader,
       'Linear/Radial/SweepGradient not supported yet',
     );
+    if (vertices.hasNoPoints) {
+      // Drawing empty vertices is a no-op.
+      return;
+    }
     final Int32List? colors = vertices.colors;
     final ui.VertexMode mode = vertices.mode;
     final DomCanvasRenderingContext2D ctx = _canvasPool.context;
